@@ -21,7 +21,6 @@ local speed = 0 -- base speed definition of the gear
 local ropes = {}
 local initialRopes = {} 
 local currentVelocities = {} -- this is used to store velocities so that all values in the table can be added to calculate the desired velocity
-local currentAlignments = {}
 local sliding = false
 local slideVelocity = nil
 local boosting = false
@@ -222,7 +221,7 @@ local function shootRope(origin,dest,side)
     ropeConnection = RunService.RenderStepped:Connect(function()
         local grappleRay = Ray.new(ropeDest.Position, (dest - origin.Position).unit * ODMGSettings.GrappleSpeed) -- create a ray towards the hook from the character's position (origin in this case)
         local grapplePart, grapplePoint = workspace:FindPartOnRayWithIgnoreList(grappleRay, {origin, ropeDest, workspace.Ignore, character})
-        if (humanoidRootPart.Position - grapplePoint).magnitude > ODMGSettings.RopeMaxLength then -- if statement to check if the hook is too far away
+        if (humanoidRootPart.Position - grapplePoint).magnitude > ODMGSettings.RopeMaxLength then -- check if the hook is too far away
             print("Grapple too long")
             initialRope:Destroy()
             table.remove(initialRopes,table.find(initialRopes,initialRopeTable))
@@ -236,7 +235,7 @@ local function shootRope(origin,dest,side)
             print(grapplePart)
             if findAndDestroyRopes(side) then return end -- if a rope already exists, destroy it and return
             initialRope:Destroy()
-            findAndDestroyInitialRopes(side) -- destroy all other initial rope (is this even needed?)
+            findAndDestroyInitialRopes(side) -- destroy all other initial ropes
             currentBodyVelocity.MaxForce = 5000 -- set the max force for the character's body to 5000 to prepare for the movement
             character.Humanoid.AutoRotate = false
             currentAlignment.MaxTorque = Vector3.new(2000,2000,2000) -- set the max torque for the character's alignment to 2000 to prepare for the movement
@@ -301,7 +300,7 @@ UIS.InputBegan:Connect(function(input,processed)
         else
             turnSpeed = -ODMGSettings.BaseRotationSpeed
         end
-    elseif input.KeyCode == Enum.KeyCode.Space then
+    elseif input.KeyCode == Enum.KeyCode.Space then -- if the player presses space, boost
         remotes.ReplicateEffect:FireServer("Boost",0,true)
         remotes.ReplicateSound:FireServer("Boost",true)
         boosting = true
@@ -331,7 +330,7 @@ UIS.InputEnded:Connect(function(input,processed)
         turnSpeed = 0
     elseif input.KeyCode == Enum.KeyCode.D then
         turnSpeed = 0
-    elseif input.KeyCode == Enum.KeyCode.Space then
+    elseif input.KeyCode == Enum.KeyCode.Space then -- if the player releases space, stop boosting
         remotes.ReplicateEffect:FireServer("Boost",0,false)
         remotes.ReplicateSound:FireServer("Boost",false)
         boosting = false
@@ -340,39 +339,37 @@ end)
 
 
 local function slide(velocity)
-    if sliding then return end
-    print(velocity)
-    local timeElapsed = 0
-    character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+    if sliding then return end -- if we are already sliding then return
+    character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false) -- prevents jumping while sliding
     sliding = true
     slideVelocity = Instance.new("BodyVelocity")
     slideVelocity.Name = "SlideVelocity"
-    slideVelocity.Velocity = Vector3.new(velocity.X, 0, velocity.Z)
-    slideVelocity.MaxForce = Vector3.new(math.huge,0,math.huge)
+    slideVelocity.Velocity = Vector3.new(velocity.X, 0, velocity.Z) 
+    slideVelocity.MaxForce = Vector3.new(math.huge,0,math.huge) -- the y value is 0 because we want the character to be affected by gravity
     slideVelocity.Parent = character.HumanoidRootPart
     slideAnim:Play()
     local connection = nil
     connection = RunService.RenderStepped:Connect(function(dt)
-        local slideRay = Ray.new(character.HumanoidRootPart.Position, CFrame.new(character.HumanoidRootPart.Position,velocity).LookVector * 4 + Vector3.new(0,2,0))
-        local slidePart, slidePoint = workspace:FindPartOnRayWithIgnoreList(slideRay, {workspace.Ignore, character})
+        local slideRay = Ray.new(character.HumanoidRootPart.Position, CFrame.new(character.HumanoidRootPart.Position,velocity).LookVector * 4 + Vector3.new(0,2,0)) -- create a ray to check if there is a wall in front of the character
+        local slidePart, slidePoint = workspace:FindPartOnRayWithIgnoreList(slideRay, {workspace.Ignore, character}) -- check if there is a wall in front of the character with an ignore list
         if slidePart then
             print("Slide hit " .. tostring(slidePoint),slidePart)
             stopSlide()
             connection:Disconnect()
             return
         end
-        if Vector3.new(humanoidRootPart.Velocity.X,0,humanoidRootPart.Velocity.Z).Magnitude < 10 or sliding == false or not UIS:IsKeyDown(Enum.KeyCode.C) then
+        if Vector3.new(humanoidRootPart.Velocity.X,0,humanoidRootPart.Velocity.Z).Magnitude < 10 or sliding == false or not UIS:IsKeyDown(Enum.KeyCode.C) then -- if we are not holding c, sliding is set to false or our velocity is below 10 then stop sliding
             print("slide stopped")
             stopSlide()
             connection:Disconnect()
             return
         end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then -- if we press space then stop sliding and jump with specified velocity
             stopSlide()
             connection:Disconnect()
             local highJumpForce = Instance.new("VectorForce")
             highJumpForce.Name = "HighJumpForce"
-            highJumpForce.Force = Vector3.new(0, ODMGSettings.HighJumpForce, 0)
+            highJumpForce.Force = Vector3.new(0, ODMGSettings.HighJumpForce, 0) -- give the character specified force to jump (in this case it is 5000 which is stored in a module)
             highJumpForce.Attachment0 = character.HumanoidRootPart:WaitForChild("ODMGAttachment")
             highJumpForce.Parent = character.HumanoidRootPart
             Debris:AddItem(highJumpForce, 0.1)
@@ -381,7 +378,7 @@ local function slide(velocity)
     task.wait(0.5)
     for i = 1,100 do
         if slideVelocity then
-            slideVelocity.Velocity = slideVelocity.Velocity:Lerp(Vector3.new(0,0,0),i/100)
+            slideVelocity.Velocity = slideVelocity.Velocity:Lerp(Vector3.new(0,0,0),i/100) -- lerp the velocity to simulate deceleration in the sliding (this is not a realistic deceleration)
             task.wait(0.1)
         else 
             stopSlide()
@@ -394,7 +391,7 @@ end
 character.Humanoid.StateChanged:Connect(function(old,new)
     if new == Enum.HumanoidStateType.Landed then
         if UIS:IsKeyDown(Enum.KeyCode.C) then
-            if Vector3.new(humanoidRootPart.Velocity.X,0,humanoidRootPart.Velocity.Z).Magnitude > 50 then
+            if Vector3.new(humanoidRootPart.Velocity.X,0,humanoidRootPart.Velocity.Z).Magnitude > 50 then -- if we are holding c and our velocity is above 50 when landing then slide
                 slide(humanoidRootPart.Velocity)
             end
         end
@@ -402,9 +399,8 @@ character.Humanoid.StateChanged:Connect(function(old,new)
 end)
 
 while true do
-    camera.FieldOfView = 70 + character.HumanoidRootPart.Velocity.Magnitude / 10
-    local mainVelocity = Vector3.new(0,0,0)
-    local mainAlignment = CFrame.new()
+    camera.FieldOfView = 70 + character.HumanoidRootPart.Velocity.Magnitude / 10 -- change the camera field of view based on the velocity of the character
+    local mainVelocity = Vector3.new(0,0,0) -- create a variable to store the velocity of the character 
     for _, velocity in pairs(currentVelocities) do
         mainVelocity = mainVelocity + velocity[2]
     end
